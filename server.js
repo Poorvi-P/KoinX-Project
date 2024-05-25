@@ -64,6 +64,45 @@ app.post('/upload', upload.single('file'), (req, res) => {
             res.send('File uploaded and data saved to database!');
         });
 });
+
+app.get('/asset-balance', async (req, res) => {
+    try {
+      console.log(req.body);
+      if (!req.body || !req.body.timestamp) {
+        return res.status(400).json({ error: 'Timestamp is missing in the request body' });
+      }
+  
+      const { timestamp } = req.body;
+      const trades = await Trade.find({ utcTime: { $lt: new Date(timestamp) } });
+  
+      // Calculate asset-wise balances
+      const assetBalances = {};
+      trades.forEach((trade) => {
+        const { operation, market, buySellAmount } = trade;
+        const [asset] = market.split('/');
+        if (!assetBalances[asset]) {
+          assetBalances[asset] = 0;
+        }
+        if (operation === 'Buy') {
+          assetBalances[asset] += buySellAmount;
+        } else {
+          assetBalances[asset] -= buySellAmount;
+        }
+      });
+  
+      // Remove assets with zero balance
+      Object.keys(assetBalances).forEach((asset) => {
+        if (assetBalances[asset] === 0) {
+          delete assetBalances[asset];
+        }
+      });
+  
+      res.json(assetBalances);
+    } catch (err) {
+      console.error('Error retrieving asset balances:', err);
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+  });
   
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
